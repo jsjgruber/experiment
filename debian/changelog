@@ -1,0 +1,11 @@
+experiment (0.2.2) unstable; urgency=low
+
+  * Rename the package to experiment 
+
+ -- John S Gruber <JohnSGruber@gmail.com>  Sat, 11 Jun 2022 16:24:11 -0400
+
+experiment (0.2.1) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- John S Gruber <JohnSGruber@gmail.com>  Wed, 01 May 2022 21:28:08 -0400

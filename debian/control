@@ -1,0 +1,21 @@
+Source: experiment
+Section: Miscellaneous
+Priority: optional
+Maintainer: John S Gruber <JohnSGruber@gmail.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.6
+# Homepage: <insert the upstream URL, if relevant>
+#Vcs-Git: git://anonscm.debian.org/collab-maint/tryfirst.git
+#Vcs-Browser: https://anonscm.debian.org/gitweb/?p=collab-maint/tryfirst.git;a=summary
+
+Package: experiment
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Debian package for experimentation and practice
+ Package for experimentation with Debian packaging, git, github features, docker
+ and other technologies.
+
+Package: experiment-doc
+Architecture: all
+Description: documentation for experiment
+ A second package that doesn't really contain anything useful.
