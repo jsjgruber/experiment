@@ -1,0 +1,75 @@
+# This is a basic workflow that is manually triggered
+
+name: Manual workflow
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on:
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      name:
+        # Friendly description to be shown in the UI instead of 'name'
+        description: 'Person to greet'
+        # Default value if no value is explicitly provided
+        default: 'World'
+        # Input has to be provided for the workflow to run
+        required: true
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "greet"
+  greet:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      with:
+        clean: false
+    - name: retrieve a second repo
+      env: 
+        SOURCE: https://salsa.debian.org/debian-hamradio-team/aprsdigi/-/archive/master/aprsdigi-master.tar.gz
+      run: |
+        mkdir packaging-repo
+        wget -qO - $SOURCE | tar xpz -C packaging-repo
+    - name: Copy debian directory
+      run: |
+        cp -ar packaging-repo/*/debian ./debian2
+        rm -rf packaging-repo
+        find .
+    - name: Enable qemu--static interpreter and preserve access to them
+      run: |
+        echo "QEMU step"
+        docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    - name: Create build.bash
+      run: |
+        cat > build.bash <<EOF
+        #!/bin/bash
+        dpkg-buildpackage --source
+        dpkg-buildpackage -uc -us
+        EOF
+    - name: Create a Dockerfile
+      run: |
+        cat > Dockerfile <<EOF
+        FROM arm64v8/ubuntu:latest AS build-jammy-arm64v8
+        # ADD qemu-aarch64-static /usr/bin/
+        RUN apt-get update && /bin/true
+        RUN apt-get upgrade -y && /bin/true
+        RUN apt-get install -y build-essential debhelper sudo man less pbuilder vim
+        RUN apt-get clean -y
+        RUN mkdir -p /build/package
+        CMD /bin/bash
+    - name: check the files
+      run: |
+        echo Dockerfile
+        cat Dockerfile
+        echo build.bash
+        cat build.bash
+    - name: Send greeting
+      run: |
+        echo "Hello ${{ github.event.inputs.name }}"
+        pwd
+#        find /home/runner/work
+          
