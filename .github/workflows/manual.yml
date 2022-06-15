@@ -16,6 +16,11 @@ on:
         default: 'World'
         # Input has to be provided for the workflow to run
         required: true
+      inputpackagename:
+        description: 'Name of debian source package'
+        default: ''
+        required: false
+
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -25,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE: "build-jammy-arm64v8"
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     - name: Checkout repo
@@ -35,39 +41,65 @@ jobs:
       env: 
         SOURCE: https://salsa.debian.org/debian-hamradio-team/aprsdigi/-/archive/master/aprsdigi-master.tar.gz
       run: |
+        echo Start retrieve a second repo
         mkdir packaging-repo
         wget -qO - $SOURCE | tar xpz -C packaging-repo
-    - name: Copy debian directory
+        packagename=$inputpackagename
+        [ -z $packagename ] && [ -r debian-source-packagename ] && \
+            packagename=`head -n1 debian-source-packagename`
+        [ -z $packagename ] && packagename=`basename $(pwd)`
+        echo packagename is $packagename
+        echo globalpackagename=$packagename >> $GITHUB_ENV
+    - name: Copy debian directory from SOURCE
       run: |
         cp -ar packaging-repo/*/debian ./debian2
         rm -rf packaging-repo
-        find .
     - name: Enable qemu--static interpreter and preserve access to them
       run: |
         echo "QEMU step"
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-        
+    - name: Set up directories
+      run: |
+        echo "$GITHUB_WORKSPACE" $GITHUB_WORKSPACE
+        mkdir -p results/package        
     - name: Create build.bash
       run: |
+        packagename=${{ env.globalpackagename }}
+
         cat > build.bash <<EOF
         #!/bin/bash
         set -xe
-        pwd
+        cp /etc/apt/sources.list ../sources.list
+        sed -e "s/^deb/deb-src/" </etc/apt/sources.list >>../sources.list \
+         && mv ../sources.list /etc/apt/sources.list
         cd /results/package
-        pwd
-        touch /results/this=is-results
-        touch /results/package/this-is-package
+        mkdir $packagename
+        cd $packagename
+        export DEBEMAIL=root@gh-rebuild
+        apt-get update
+        #apt-get source $packagename
+        apt-get source aprsdigi
+        cd ..
+        cp -ar $packagename/*/debian ./debian-apt
+        rm -rf $packagename
+        dch -R Github actions build from upstream
+        echo debian/changelog
+        cat debian/changelog
         dpkg-buildpackage -uc -us
-        ls -la ..
-        ls -la /results/package
-        ls -la /results
         cp ./tuttut /results
+        echo "The container's /results contents"
+        ls -la /results
+        # Temporary test
+        file ./tuttut
+        ./tuttut
         EOF
+
         chmod +x build.bash
-    - name: Create a Dockerfile
+
+    - name: Create a Dockerfile and build an image
       run: |
-        cat > Dockerfile <<EOF
-        FROM buildpack-deps:focal AS $IMAGE
+        cat  > Dockerfile <<EOF
+        FROM buildpack-deps:stable AS $IMAGE
         ADD build.bash /build.bash
         RUN apt-get update
         RUN apt-get install -y build-essential debhelper sudo man less pbuilder vim
@@ -76,38 +108,20 @@ jobs:
         WORKDIR /results/package
         CMD /bin/bash
         EOF
-    - name: Set up directories
-      run: |
-        mkdir -p results/package
-    - name: Build docker container
-      run: |
-        docker build -t $IMAGE .
-        echo $(pwd)
-        echo printenv
-        echo $GITHUB_WORKSPACE
-        printenv
-    - name: Check the image
-      run: |
-        docker images
-        docker inspect $IMAGE
-        printenv
-        echo $IMAGE
+        docker build --platform linux/arm64/v8 -t $IMAGE .
     - name: "**** Run the docker container ****"
-        # our working directory is the container's root with the -v flag below
-        # --mount type=bind,source=/home/gruber/learn-packaging,target=/build
+        # our working directory with the package repo is the container's ./results/package
+        # with the --mount option below
+        # Our ./results maps to container's /results
+        # It's trickey because the build puts its products into the project's parent directory
       run: |
         docker run --rm --privileged --mount type=bind,source=/home/runner/work/experiment/experiment/results,target=/results \
           --mount type=bind,source=/home/runner/work/experiment/experiment,target=/results/package \
           $IMAGE /build.bash
-    - name: Send greeting
-      run: |
-        echo "Hello ${{ github.event.inputs.name }}"
-        pwd
-        echo $(pwd)
-        ls -la . results/ results/package
     - name: Upload results
       uses: actions/upload-artifact@v3
       with:
         name: results
         path: results/
+        retention-days: 5
           
