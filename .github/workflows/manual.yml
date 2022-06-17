@@ -9,18 +9,36 @@ on:
   workflow_dispatch:
     # Inputs the workflow accepts.
     inputs:
-      name:
+      INPUTPLATFORM:
         # Friendly description to be shown in the UI instead of 'name'
-        description: 'Person to greet'
+        description: 'The platform to speciry to docker build, defaults to linux/arm64/v8'
         # Default value if no value is explicitly provided
-        default: 'World'
+        default: 'arm64'
         # Input has to be provided for the workflow to run
-        required: true
-      inputpackagename:
-        description: 'Name of debian source package'
+        required: false
+      
+      INPUTSOURCEIMAGE:
+        description: 'The name of the debian based release we are building, defaults to ?'
+        default: 'buildpack-deps'
+        required: false
+
+      INPUTRELEASE:
+        description: 'The name of the release the input image is based on, defaults to stable'
+        default: 'stable'
+        required: false
+
+      INPUTPACKAGENAME:
+        description: 'Name of debian source package, defaults to repo name'
         default: ''
         required: false
 
+      INPUTBUILDDEPENDENCIES:
+        description: 'Additional build depencencies needed, defaults to sudo for testing'
+        default: ''
+        required: false
+
+env: 
+  SOURCE: https://salsa.debian.org/debian-hamradio-team/aprsdigi/-/archive/master/aprsdigi-master.tar.gz
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -29,7 +47,12 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     env:
-      IMAGE: "build-jammy-arm64v8"
+      IMAGE: "build-${{inputs.INPUTRELEASE}}-${{inputs.INPUTPLATFORM}}"
+      PLATFORM: ${{inputs.INPUTPLATFORM}}
+      SOURCEIMAGE: ${{inputs.INPUTSOURCEIMAGE}}
+      RELEASE:     ${{inputs.INPUTRELEASE}}
+      PACKAGENAME: ${{inputs.INPUTPACKAGENAME}}
+      BUILDDEPENDENCIES: ${{inputs.INPUTBUILDDEPENDENCIES}}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -37,31 +60,23 @@ jobs:
       uses: actions/checkout@v3
       with:
         clean: false
-    - name: retrieve a second repo
-      env: 
-        SOURCE: https://salsa.debian.org/debian-hamradio-team/aprsdigi/-/archive/master/aprsdigi-master.tar.gz
+
+    - name: Set up parameters
       run: |
-        echo Start retrieve a second repo
-        mkdir packaging-repo
-        wget -qO - $SOURCE | tar xpz -C packaging-repo
-        packagename=$inputpackagename
+        packagename=$PACKAGENAME
+        echo 'here we go' $packagename
         [ -z $packagename ] && [ -r debian-source-packagename ] && \
             packagename=`head -n1 debian-source-packagename`
         [ -z $packagename ] && packagename=`basename $(pwd)`
         echo packagename is $packagename
         echo globalpackagename=$packagename >> $GITHUB_ENV
-    - name: Copy debian directory from SOURCE
-      run: |
-        cp -ar packaging-repo/*/debian ./debian2
-        rm -rf packaging-repo
+
     - name: Enable qemu--static interpreter and preserve access to them
       run: |
-        echo "QEMU step"
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-    - name: Set up directories
+    - name: Set up directories for building
       run: |
-        echo "$GITHUB_WORKSPACE" $GITHUB_WORKSPACE
-        mkdir -p results/package        
+        mkdir -p results/package      
     - name: Create build.bash
       run: |
         packagename=${{ env.globalpackagename }}
@@ -69,6 +84,8 @@ jobs:
         cat > build.bash <<EOF
         #!/bin/bash
         set -xe
+        # Get the debian/ via apt-get source
+        # First produce a deb-src line for every deb line in /etc/apt/sources.list
         cp /etc/apt/sources.list ../sources.list
         sed -e "s/^deb/deb-src/" </etc/apt/sources.list >>../sources.list \
          && mv ../sources.list /etc/apt/sources.list
@@ -81,9 +98,14 @@ jobs:
         apt-get source aprsdigi
         cd ..
         cp -ar $packagename/*/debian ./debian-apt
+        rm -rf $packagename/*
+        # get a tar fromo salsa.debian.org via $SOURCE constant
+        wget -qO - $SOURCE | tar xpz -C $packagename
+        cp -ar $packagename/*/debian ./debian2
         rm -rf $packagename
+
         dch -R Github actions build from upstream
-        echo debian/changelog
+        echo debian/changelog -- 
         cat debian/changelog
         dpkg-buildpackage -uc -us
         cp ./tuttut /results
@@ -99,16 +121,19 @@ jobs:
     - name: Create a Dockerfile and build an image
       run: |
         cat  > Dockerfile <<EOF
-        FROM buildpack-deps:stable AS $IMAGE
+        #   buildpack-deps for focal
+        FROM $SOURCEIMAGE:$RELEASE AS $IMAGE
         ADD build.bash /build.bash
         RUN apt-get update
-        RUN apt-get install -y build-essential debhelper sudo man less pbuilder vim
+        # RUN apt-get install -y build-essential debhelper sudo less pbuilder vim man
+        RUN apt-get install -y build-essential debhelper devscripts $BUILDDEPENDENCIES
         RUN apt-get clean -y
         RUN mkdir -p /results/package
         WORKDIR /results/package
         CMD /bin/bash
         EOF
-        docker build --platform linux/arm64/v8 -t $IMAGE .
+
+        docker build --platform $PLATFORM -t $IMAGE .
     - name: "**** Run the docker container ****"
         # our working directory with the package repo is the container's ./results/package
         # with the --mount option below
@@ -124,4 +149,3 @@ jobs:
         name: results
         path: results/
         retention-days: 5
-          
