@@ -19,12 +19,12 @@ on:
       
       INPUTSOURCEIMAGE:
         description: 'The name of the debian based release we are building, defaults to ?'
-        default: 'buildpack-deps'
+        default: 'debian'
         required: false
 
       INPUTRELEASE:
         description: 'The name of the release the input image is based on, defaults to stable'
-        default: 'stable'
+        default: 'stable-slim'
         required: false
 
       INPUTPACKAGENAME:
