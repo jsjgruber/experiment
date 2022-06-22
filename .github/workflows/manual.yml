@@ -84,6 +84,7 @@ jobs:
         cat > build.bash <<EOF
         #!/bin/bash
         set -xe
+        export DEBIAN_FRONTEND=noninteractive
         # Get the debian/ via apt-get source
         # First produce a deb-src line for every deb line in /etc/apt/sources.list
         cp /etc/apt/sources.list ../sources.list
@@ -105,13 +106,11 @@ jobs:
         rm -rf $packagename
 
         dch -R Github actions build from upstream
-        echo debian/changelog -- 
-        cat debian/changelog
         sed -i '1s/)/~build`date -u +"%Y%m%d%H%M%S" `)/' debian/changelog
-        echo ----------- debian/changelog for this build -------------
-        cat debian/changelog
 
-        /usr/lib/pbuilder/pbuilder-satisfydepends --control debian/control
+        # /usr/lib/pbuilder/pbuilder-satisfydepends --control debian/control
+        mk-build-deps -i -t \
+          'apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y'
 
         dpkg-buildpackage -uc -us
 
@@ -138,7 +137,7 @@ jobs:
         RUN apt-get update
         # RUN apt-get install -y build-essential debhelper sudo less pbuilder vim man
         RUN apt-get install -y build-essential debhelper devscripts \
-         pbuilder aptitude $BUILDDEPENDENCIES
+          aptitude wget $BUILDDEPENDENCIES
         RUN apt-get clean -y
         RUN mkdir -p /results/package
         WORKDIR /results/package
