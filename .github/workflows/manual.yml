@@ -64,7 +64,6 @@ jobs:
     - name: Set up parameters
       run: |
         packagename=$PACKAGENAME
-        echo 'here we go' $packagename
         [ -z $packagename ] && [ -r debian-source-packagename ] && \
             packagename=`head -n1 debian-source-packagename`
         [ -z $packagename ] && packagename=`basename $(pwd)`
@@ -74,9 +73,12 @@ jobs:
     - name: Enable qemu--static interpreter and preserve access to them
       run: |
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-    - name: Set up directories for building
+    - name: find the name of the parent directory
       run: |
-        mkdir -p results/package      
+        pushd ..
+        RESULT_DIRECTORY=$(pwd)
+        echo RESULT_DIRECTORY=$RESULT_DIRECTORY >> $GITHUB_ENV
+        popd
     - name: Create build.bash
       run: |
         packagename=${{ env.globalpackagename }}
@@ -90,7 +92,7 @@ jobs:
         cp /etc/apt/sources.list ../sources.list
         sed -e "s/^deb/deb-src/" </etc/apt/sources.list >>../sources.list \
          && mv ../sources.list /etc/apt/sources.list
-        cd /results/package
+        cd /results/ourpackage
         mkdir $packagename
         cd $packagename
         export DEBEMAIL=root@gh-rebuild
@@ -128,8 +130,10 @@ jobs:
         chmod +x build.bash
 
     - name: Create a Dockerfile and build an image
+      if:  ${{ env.IMAGE_FOUND }} == False
       run: |
         docker image list $IMAGE
+        
         cat  > Dockerfile <<EOF
         #   buildpack-deps for focal
         FROM $SOURCEIMAGE:$RELEASE AS $IMAGE
@@ -139,8 +143,8 @@ jobs:
         RUN apt-get install -y build-essential debhelper devscripts \
           aptitude wget $BUILDDEPENDENCIES
         RUN apt-get clean -y
-        RUN mkdir -p /results/package
-        WORKDIR /results/package
+        RUN mkdir -p /results/ourpackage
+        WORKDIR /results/ourpackage
         CMD /bin/bash
         EOF
 
@@ -151,16 +155,21 @@ jobs:
         # Our ./results maps to container's /results
         # It's trickey because the build puts its products into the project's parent directory
       run: |
-        docker run --rm --privileged --mount type=bind,source=/home/runner/work/experiment/experiment/results,target=/results \
-          --mount type=bind,source=/home/runner/work/experiment/experiment,target=/results/package \
+        docker run --rm --privileged \
+         --mount type=bind,source=/home/runner/work/$globalpackagename/,target=/results \
+         --mount type=bind,source=/home/runner/work/$globalpackagename/$globalpackagename,target=/results/ourpackage \
           $IMAGE /build.bash
-    - name: Check images
-      run: docker image ls --all
-    - name: Check for our image
-      run: docker image ls $IMAGE
+    - name: Copy results to an empty directory so we don't upload any child directories
+      run: |
+        OUR_RESULTS=$(mktemp -d)
+        ls -l $RESULT_DIRECTORY
+        cp -a $RESULT_DIRECTORY/* $OUR_RESULTS
+        rm -rf $OUR_RESULTS/$globalpackagename
+        ls -l $OUR_RESULTS/
+        echo OUR_RESULTS=$OUR_RESULTS >> $GITHUB_ENV
     - name: Upload results
       uses: actions/upload-artifact@v3
       with:
         name: results
-        path: results/
+        path: ${{ env.OUR_RESULTS}}
         retention-days: 5
