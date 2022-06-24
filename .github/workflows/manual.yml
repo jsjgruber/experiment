@@ -130,10 +130,7 @@ jobs:
         chmod +x build.bash
 
     - name: Create a Dockerfile and build an image
-      if:  ${{ env.IMAGE_FOUND }} == False
-      run: |
-        docker image list $IMAGE
-        
+      run: |        
         cat  > Dockerfile <<EOF
         #   buildpack-deps for focal
         FROM $SOURCEIMAGE:$RELEASE AS $IMAGE
