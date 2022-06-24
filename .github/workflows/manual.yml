@@ -47,7 +47,7 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     env:
-      IMAGE: "build-${{inputs.INPUTRELEASE}}-${{inputs.INPUTPLATFORM}}"
+      IMAGE: "build-${{inputs.INPUTSOURCEIMAGE}}-${{inputs.INPUTRELEASE}}-${{inputs.INPUTPLATFORM}}"
       PLATFORM: ${{inputs.INPUTPLATFORM}}
       SOURCEIMAGE: ${{inputs.INPUTSOURCEIMAGE}}
       RELEASE:     ${{inputs.INPUTRELEASE}}
@@ -162,10 +162,8 @@ jobs:
     - name: Copy results to an empty directory so we don't upload any child directories
       run: |
         OUR_RESULTS=$(mktemp -d)
-        ls -l $RESULT_DIRECTORY
         cp -a $RESULT_DIRECTORY/* $OUR_RESULTS
         rm -rf $OUR_RESULTS/$globalpackagename
-        ls -l $OUR_RESULTS/
         echo OUR_RESULTS=$OUR_RESULTS >> $GITHUB_ENV
     - name: Upload results
       uses: actions/upload-artifact@v3
