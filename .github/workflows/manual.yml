@@ -116,14 +116,6 @@ jobs:
 
         dpkg-buildpackage -uc -us
 
-        cp ./tuttut /results
-        
-        echo "The container's /results contents"
-        ls -la /results
-
-        # Temporary test
-        file ./tuttut
-        ./tuttut
         EOF
 
         # Make the build.bash file we created executible for the Docker run
