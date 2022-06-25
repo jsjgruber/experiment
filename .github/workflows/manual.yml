@@ -79,6 +79,12 @@ jobs:
         RESULT_DIRECTORY=$(pwd)
         echo RESULT_DIRECTORY=$RESULT_DIRECTORY >> $GITHUB_ENV
         popd
+    - name: Create temporary directory for results
+      id: create-temp-directory
+      run: |
+        RESULTS=$(mktemp -d)
+        echo OUR_RESULTS=$OUR_RESULTS >> $GITHUB_ENV
+
     - name: Create build.bash
       run: |
         packagename=${{ env.globalpackagename }}
@@ -145,18 +151,26 @@ jobs:
         # It's trickey because the build puts its products into the project's parent directory
       run: |
         docker run --rm --privileged \
-         --mount type=bind,source=/home/runner/work/$globalpackagename/,target=/results \
+         --mount type=bind,source=$RESULTS,target=/results \
          --mount type=bind,source=/home/runner/work/$globalpackagename/$globalpackagename,target=/results/ourpackage \
           $IMAGE /build.bash
     - name: Copy results to an empty directory so we don't upload any child directories
+      if: false
       run: |
         OUR_RESULTS=$(mktemp -d)
         cp -a $RESULT_DIRECTORY/* $OUR_RESULTS
         rm -rf $OUR_RESULTS/$globalpackagename
         echo OUR_RESULTS=$OUR_RESULTS >> $GITHUB_ENV
     - name: Upload results
+      if: false
       uses: actions/upload-artifact@v3
       with:
         name: results
         path: ${{ env.OUR_RESULTS}}
+        retention-days: 5
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: results
+        path: ${{ env.RESULTS}}
         retention-days: 5
