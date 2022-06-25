@@ -83,7 +83,7 @@ jobs:
       id: create-temp-directory
       run: |
         RESULTS=$(mktemp -d)
-        echo OUR_RESULTS=$OUR_RESULTS >> $GITHUB_ENV
+        echo RESULTS=$RESULTS >> $GITHUB_ENV
 
     - name: Create build.bash
       run: |
